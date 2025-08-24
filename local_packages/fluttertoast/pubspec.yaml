@@ -1,0 +1,21 @@
+name: fluttertoast
+description: Empty implementation of fluttertoast to avoid compilation issues
+version: 8.2.8
+homepage: https://github.com/ponnamkarthik/FlutterToast
+
+environment:
+  sdk: ">=2.12.0 <4.0.0"
+  flutter: ">=1.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: io.github.ponnamkarthik.toast.fluttertoast
+        pluginClass: FlutterToastPlugin
+      ios:
+        pluginClass: FluttertoastPlugin 
