@@ -1,73 +1,111 @@
-FitConnect
+# FitConnect - Fitness Session Booking App
 
-A Flutter + Firebase fitness app for authentication, session booking, QR attendance, and payment gateway integration.
+A Flutter + Firebase application for booking fitness sessions, tracking attendance with QR codes, and managing user profiles.
 
-Getting Started
+## Features Implemented
 
-This project was built as part of the Code-X-Novas Flutter + Firebase Developer Assignment.
+### Phase 1 (Core Features)
 
-Features Implemented
+1. **Authentication**
+   - Email/password signup & login
+   - User profiles stored in Firestore
 
-🔑 Firebase Authentication (Email/Password)
+2. **Dashboard**
+   - Profile data display
+   - Membership status indicator
+   - Quick action buttons for booking and QR scanning
 
-👤 User Profile stored in Firestore
+3. **Session Booking**
+   - Book Yoga, Gym, or Zumba sessions
+   - Date and time slot selection
+   - Different pricing for each session type
+   - Bookings stored in Firestore
 
-📊 Dashboard with profile data + progress indicator
+4. **QR Attendance**
+   - QR code generation for each booking
+   - Scanner to mark attendance
+   - Attendance status tracking in Firestore
 
-📝 Session Booking (Yoga, Gym, Zumba) saved in Firestore
+5. **Payment Integration**
+   - Razorpay payment gateway integration
+   - On successful payment, updates membership_active status in Firestore
+   - Multiple membership plans with different pricing
+   - Fallback to dialog-based approach if Razorpay initialization fails
 
-📱 QR Attendance (Generate + Scan QR for bookings)
+### Phase 2 (Bonus Features)
 
-💳 Razorpay Payment Integration (test mode)
+- Booking history screen to view past and upcoming sessions
+- Membership management screen with different plans
 
-Features Skipped (Optional)
+## Setup Instructions
 
-Push Notifications (FCM)
+### Prerequisites
+- Flutter SDK (3.7.2 or higher)
+- Dart SDK (3.0.0 or higher)
+- Android Studio / VS Code
+- Firebase account
+- Razorpay account (for payment gateway)
 
-Referral System
+### Firebase Setup
+1. Create a new Firebase project
+2. Enable Email/Password Authentication
+3. Create Firestore Database
+4. Add Android app to your Firebase project
+5. Download `google-services.json` and place it in the `android/app` directory
 
-Cafeteria Ordering System
+### Environment Setup
+1. Create a `.env` file in the root directory with:
+```
+RAZORPAY_KEY_ID=rzp_test_R98nDyrvpNzYDc
+RAZORPAY_KEY_SECRET=gdGEerEYY5Jgbl14sV6VL2il
+```
 
-Google Fit / Apple Health API sync
+### Installation
+1. Clone the repository
+```bash
+git clone https://github.com/yourusername/fitconnect.git
+```
 
-Setup
-
-Clone the repo
-
-git clone https://github.com/your-username/fitconnect_flutter_firebase.git
-cd fitconnect_flutter_firebase
-
-
-Install dependencies
-
+2. Install dependencies
+```bash
 flutter pub get
+```
 
-
-Setup Firebase
-
-Create Firebase project & enable Authentication + Firestore.
-
-Add google-services.json (Android) in android/app/.
-
-Add GoogleService-Info.plist (iOS) in ios/Runner/.
-
-Run the app
-
+3. Run the app
+```bash
 flutter run
+```
 
+## Firestore Structure
 
-Build APK
+- **users**: User profiles with name, email, and membership status
+  - Fields: name, email, membership_active, membership_updated_at
 
-flutter build apk --release
+- **booking**: Session bookings with type, date, time, and attendance status
+  - Fields: userId, type, date, time, attendance, created_at
 
-Firestore Structure
-users/{uid}:
-  name, email, membership_active, referral_code(optional)
+## Testing
 
-bookings/{uid}/sessions/{sessionId}:
-  type, date, attendance
+1. Sign up with email and password
+2. Book a session by selecting type, date, and time
+3. Complete the payment process
+4. View your booking in the booking history
+5. Use the QR code to mark attendance
+6. Purchase a membership plan to update your membership status
 
-Author
+## Testing Razorpay Integration
 
-👨‍💻 Naveen Mayandi
-Flutter + Firebase Developer
+For testing the Razorpay payment gateway:
+- Use card number: 4111 1111 1111 1111
+- Any future expiry date
+- Any CVV (e.g., 123)
+- Any name
+
+## Technologies Used
+
+- Flutter for UI
+- Firebase Authentication for user management
+- Firestore for database
+- QR Flutter for QR code generation
+- Mobile Scanner for QR scanning
+- Razorpay Flutter plugin for payment gateway

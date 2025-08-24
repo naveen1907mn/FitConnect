@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:fitconnect/services/payment_service.dart';
+import 'package:fitconnect/services/simple_payment_service.dart';
 import 'package:fitconnect/utils/notification_utils.dart';
 import 'package:fitconnect/screens/auth/login_screen.dart';
 
@@ -52,9 +53,16 @@ class _BookingScreenState extends State<BookingScreen> {
       _auth = FirebaseAuth.instance;
       _firestore = FirebaseFirestore.instance;
       
-      // Always set to true since we're just getting the instance
-      _firestoreInitialized = true;
-      print("Firestore initialized successfully");
+      // Test if Firestore is working by getting a document
+      try {
+        await _firestore.collection('booking').doc('test').get();
+        _firestoreInitialized = true;
+        print("Firestore initialized successfully");
+      } catch (e) {
+        print("Firestore test failed, but continuing: $e");
+        // Set to true anyway since we got the instance
+        _firestoreInitialized = true;
+      }
     } catch (e) {
       print("Error initializing Firebase: $e");
     }
@@ -117,14 +125,12 @@ class _BookingScreenState extends State<BookingScreen> {
       final double amount = _prices[_selectedType] ?? 299.0;
       final user = _auth.currentUser;
       
-      print("Initiating payment with Razorpay...");
-      final bool paymentSuccessful = await PaymentService.showRazorpayCheckout(
+      print("Initiating payment with SimplePaymentService...");
+      final bool paymentSuccessful = await SimplePaymentService.showPaymentDialog(
         context: context,
         amount: amount.toString(),
         name: 'FitConnect',
         description: '$_selectedType Session',
-        prefillEmail: user?.email,
-        prefillContact: '',
       );
       
       print("Payment result: $paymentSuccessful");

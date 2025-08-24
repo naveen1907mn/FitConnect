@@ -6,6 +6,7 @@ import 'package:fitconnect/screens/booking_screen.dart';
 import 'package:fitconnect/screens/booking_history_screen.dart';
 import 'package:fitconnect/screens/qr_scanner_screen.dart';
 import 'package:fitconnect/screens/profile_screen.dart';
+import 'package:fitconnect/screens/membership_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -253,6 +254,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     });
                   },
                 ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildActionCard(
+                  'Membership',
+                  Icons.card_membership,
+                  () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const MembershipScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Container(), // Empty container for layout balance
               ),
             ],
           ),

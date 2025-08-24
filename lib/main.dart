@@ -44,7 +44,7 @@ void main() async {
       print("Continuing without environment variables");
     }
     
-    runApp(const MyApp());
+  runApp(const MyApp());
     print("App started");
   } catch (e) {
     print("Error during initialization: $e");
@@ -64,7 +64,7 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'FitConnect',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
+      theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(
             seedColor: const Color(0xFF6C63FF),
             primary: const Color(0xFF6C63FF),
