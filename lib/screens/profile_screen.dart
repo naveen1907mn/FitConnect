@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fitconnect/services/auth_service.dart';
+import 'package:fitconnect/screens/booking_history_screen.dart';
+import 'package:intl/intl.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -25,6 +27,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadUserData();
   }
   
+  // Update the _loadUserData method to work without composite indexes
   Future<void> _loadUserData() async {
     setState(() {
       _isLoading = true;
@@ -35,34 +38,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final authService = Provider.of<AuthService>(context, listen: false);
       final profile = await authService.getUserProfile();
       
-      // Load user bookings
+      // Load user bookings from the correct collection
       if (_auth.currentUser != null) {
         final String userId = _auth.currentUser!.uid;
+        
+        // Simplified query without orderBy to avoid requiring composite index
         final QuerySnapshot snapshot = await _firestore
-            .collection('bookings')
-            .doc(userId)
-            .collection('sessions')
-            .orderBy('date', descending: true)
+            .collection('booking')
+            .where('userId', isEqualTo: userId)
             .get();
         
         final bookings = snapshot.docs.map((doc) {
           final data = doc.data() as Map<String, dynamic>;
           return {
             'id': doc.id,
-            'type': data['type'],
-            'date': data['date'],
-            'time': data['time'],
-            'attendance': data['attendance'],
+            ...data,
           };
         }).toList();
         
+        // Sort the bookings in memory instead of in the query
+        bookings.sort((a, b) {
+          final Timestamp? timestampA = a['created_at'] as Timestamp?;
+          final Timestamp? timestampB = b['created_at'] as Timestamp?;
+          
+          if (timestampA == null && timestampB == null) return 0;
+          if (timestampA == null) return 1;
+          if (timestampB == null) return -1;
+          
+          return timestampB.compareTo(timestampA); // Descending order
+        });
+        
+        // Limit to only the 5 most recent bookings after sorting
+        final recentBookings = bookings.length > 5 ? bookings.sublist(0, 5) : bookings;
+        
         setState(() {
           _userProfile = profile;
-          _userBookings = bookings;
+          _userBookings = recentBookings;
           _isLoading = false;
         });
       }
     } catch (e) {
+      debugPrint('Error loading user data: $e');
       setState(() {
         _isLoading = false;
       });
@@ -186,12 +202,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
           
           // Recent bookings
-          const Text(
-            'Recent Bookings',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Recent Bookings',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const BookingHistoryScreen(),
+                    ),
+                  );
+                },
+                child: const Text('View All'),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           
@@ -211,7 +243,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               itemCount: _userBookings.length > 3 ? 3 : _userBookings.length,
               itemBuilder: (context, index) {
                 final booking = _userBookings[index];
-                final DateTime bookingDate = (booking['date'] as Timestamp).toDate();
                 final bool isAttended = booking['attendance'] ?? false;
                 
                 return Card(
@@ -220,13 +251,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     leading: CircleAvatar(
                       backgroundColor: _getSessionColor(booking['type']),
                       child: Text(
-                        booking['type'][0],
+                        booking['type']?[0] ?? '?',
                         style: const TextStyle(color: Colors.white),
                       ),
                     ),
-                    title: Text(booking['type']),
+                    title: Text(booking['type'] ?? 'Unknown'),
                     subtitle: Text(
-                      '${bookingDate.day}/${bookingDate.month}/${bookingDate.year} at ${booking['time']}',
+                      '${_formatDate(booking['date'])} at ${booking['time'] ?? 'N/A'}',
                     ),
                     trailing: Container(
                       padding: const EdgeInsets.symmetric(
@@ -250,30 +281,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
             ),
           
-          if (_userBookings.length > 3) ...[
-            const SizedBox(height: 8),
-            Center(
-              child: TextButton(
-                onPressed: () {
-                  // Navigate to full booking history
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Full booking history coming soon!'),
-                    ),
-                  );
-                },
-                child: const Text('View All Bookings'),
-              ),
-            ),
-          ],
-          
           const SizedBox(height: 16),
         ],
       ),
     );
   }
   
-  Color _getSessionColor(String type) {
+  String _formatDate(dynamic date) {
+    if (date == null) return 'N/A';
+    
+    if (date is Timestamp) {
+      return DateFormat('EEE, MMM d, yyyy').format(date.toDate());
+    }
+    
+    return 'N/A';
+  }
+  
+  Color _getSessionColor(String? type) {
     switch (type) {
       case 'Yoga':
         return Colors.purple;

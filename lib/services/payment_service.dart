@@ -1,12 +1,27 @@
+// Remove debug print statements and clean up the code
 import 'package:flutter/material.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:fitconnect/utils/config.dart';
-import 'package:fitconnect/utils/notification_utils.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dart:async';
 
 class PaymentService {
+  // Static Razorpay instance to prevent repeated initialization
+  static Razorpay? _razorpayInstance;
+  
+  // Initialize Razorpay instance if not already initialized
+  static Future<Razorpay?> _getRazorpayInstance() async {
+    if (_razorpayInstance == null) {
+      try {
+        _razorpayInstance = Razorpay();
+      } catch (e) {
+        return null;
+      }
+    }
+    return _razorpayInstance;
+  }
+  
   static Future<bool> showRazorpayCheckout({
     required BuildContext context,
     required String amount,
@@ -16,22 +31,46 @@ class PaymentService {
     String? prefillContact,
     bool updateMembership = false,
   }) async {
-    print("Starting Razorpay payment process...");
-    
     // Create a completer to wait for the payment result
-    final completer = Completer<bool>();
     bool paymentSuccess = false;
     bool isCompleted = false;
     
     try {
-      print("Creating Razorpay instance...");
-      final Razorpay razorpay = Razorpay();
+      // Get Razorpay instance
+      final razorpay = await _getRazorpayInstance();
       
-      print("Setting up Razorpay handlers...");
+      if (razorpay == null) {
+        return _showFallbackPaymentDialog(
+          context: context,
+          amount: amount,
+          name: name,
+          description: description,
+          updateMembership: updateMembership,
+        );
+      }
+      
+      // Clear existing handlers to prevent duplicates
+      razorpay.clear();
+      
       // Set up event handlers
       razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, (PaymentSuccessResponse response) async {
-        print("Payment successful! Payment ID: ${response.paymentId}");
         paymentSuccess = true;
+        
+        // Show toast notification
+        Fluttertoast.showToast(
+          msg: "Payment successful",
+          toastLength: Toast.LENGTH_SHORT,
+        );
+        
+        // Store transaction in Firestore
+        await _storeTransaction(
+          paymentId: response.paymentId ?? 'unknown',
+          orderId: response.orderId ?? 'unknown',
+          signature: response.signature ?? 'unknown',
+          amount: amount,
+          description: description,
+          status: 'success',
+        );
         
         // Update membership status if requested
         if (updateMembership) {
@@ -39,28 +78,64 @@ class PaymentService {
         }
         
         isCompleted = true;
-        if (!completer.isCompleted) {
-          completer.complete(true);
+        if (context.mounted) {
+          Navigator.of(context).pop(true);
         }
       });
       
       razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, (PaymentFailureResponse response) {
-        print("Payment failed! Error: ${response.code} - ${response.message}");
+        // Show toast notification
+        Fluttertoast.showToast(
+          msg: "Payment failed",
+          toastLength: Toast.LENGTH_SHORT,
+        );
+        
+        // Store failed transaction in Firestore
+        _storeTransaction(
+          paymentId: 'failed',
+          orderId: 'failed',
+          signature: 'failed',
+          amount: amount,
+          description: description,
+          status: 'failed',
+          errorCode: response.code.toString(),
+          errorMessage: response.message ?? 'Unknown error',
+        );
+        
         paymentSuccess = false;
         isCompleted = true;
-        if (!completer.isCompleted) {
-          completer.complete(false);
+        if (context.mounted) {
+          Navigator.of(context).pop(false);
         }
       });
       
       razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, (ExternalWalletResponse response) {
-        print("External wallet selected: ${response.walletName}");
+        // Show toast notification
+        Fluttertoast.showToast(
+          msg: "External wallet selected",
+          toastLength: Toast.LENGTH_SHORT,
+        );
+        
+        // Store external wallet transaction in Firestore
+        _storeTransaction(
+          paymentId: 'external_wallet',
+          orderId: 'external_wallet',
+          signature: 'external_wallet',
+          amount: amount,
+          description: description,
+          status: 'external_wallet',
+          walletName: response.walletName ?? 'Unknown wallet',
+        );
+        
         paymentSuccess = false;
         isCompleted = true;
-        if (!completer.isCompleted) {
-          completer.complete(false);
+        if (context.mounted) {
+          Navigator.of(context).pop(true);
         }
       });
+      
+      // Generate a unique order ID
+      final String orderId = 'order_${DateTime.now().millisecondsSinceEpoch}';
       
       // Convert amount to paise (smallest currency unit)
       final amountInPaise = (double.parse(amount) * 100).toInt();
@@ -69,18 +144,21 @@ class PaymentService {
       final Map<String, dynamic> options = {
         'key': AppConfig.razorpayKeyId,
         'amount': amountInPaise,
-        'name': 'FitConnect',
+        'name': name,
         'description': description,
+        'order_id': orderId,
         'prefill': {
           'email': prefillEmail ?? '',
           'contact': prefillContact ?? '',
+          'name': FirebaseAuth.instance.currentUser?.displayName ?? '',
         },
         'theme': {
           'color': '#6C63FF',
         },
+        'external': {
+          'wallets': ['paytm']
+        }
       };
-      
-      print("Opening Razorpay with options: $options");
       
       // Show loading indicator
       showDialog(
@@ -115,64 +193,88 @@ class PaymentService {
         // Open Razorpay checkout
         razorpay.open(options);
       } catch (e) {
-        print("Error opening Razorpay: $e");
-        // Fall back to dialog approach if Razorpay fails to open
+        // Show fallback dialog if Razorpay fails
         if (context.mounted) {
-          Navigator.of(context).pop(); // Close any open dialogs
-          return _showFallbackPaymentDialog(
+          final bool result = await _showFallbackPaymentDialog(
             context: context,
             amount: amount,
             name: name,
             description: description,
             updateMembership: updateMembership,
           );
+          
+          return result;
         }
+        return false;
       }
       
-      // Set a timeout for the payment process
-      Timer(const Duration(minutes: 2), () {
-        if (!isCompleted) {
-          print("Payment timed out after 2 minutes");
-          if (!completer.isCompleted) {
-            completer.complete(false);
-          }
-        }
-      });
+      // Wait for the result from the payment screen
+      final result = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const Dialog(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            child: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        },
+      );
       
-      // Wait for the payment result
-      print("Waiting for payment completion...");
-      paymentSuccess = await completer.future;
-      
-      // Cleanup
-      razorpay.clear();
-      print("Razorpay instance cleared");
-      
-      return paymentSuccess;
+      return result ?? false;
     } catch (e) {
-      print("Error during Razorpay payment: $e");
-      
-      // Show error dialog
+      // Fall back to simple payment dialog
       if (context.mounted) {
-        NotificationUtils.showNotification(
-          context,
-          "Payment error: ${e.toString()}",
-          isError: true,
+        return _showFallbackPaymentDialog(
+          context: context,
+          amount: amount,
+          name: name,
+          description: description,
+          updateMembership: updateMembership,
         );
       }
       
-      // If the completer hasn't completed yet, complete it with false
-      if (!isCompleted && !completer.isCompleted) {
-        completer.complete(false);
+      return false;
+    }
+  }
+  
+  // Store transaction details in Firestore
+  static Future<void> _storeTransaction({
+    required String paymentId,
+    required String orderId,
+    required String signature,
+    required String amount,
+    required String description,
+    required String status,
+    String? errorCode,
+    String? errorMessage,
+    String? walletName,
+  }) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        // Create a transaction record
+        await FirebaseFirestore.instance.collection('transactions').add({
+          'user_id': user.uid,
+          'user_email': user.email,
+          'payment_id': paymentId,
+          'order_id': orderId,
+          'signature': signature,
+          'amount': amount,
+          'amount_in_paise': (double.parse(amount) * 100).toInt(),
+          'description': description,
+          'status': status,
+          'error_code': errorCode,
+          'error_message': errorMessage,
+          'wallet_name': walletName,
+          'created_at': FieldValue.serverTimestamp(),
+          'test_mode': false,
+        });
       }
-      
-      // Fall back to dialog approach if Razorpay fails
-      return _showFallbackPaymentDialog(
-        context: context,
-        amount: amount,
-        name: name,
-        description: description,
-        updateMembership: updateMembership,
-      );
+    } catch (e) {
+      // Handle error silently
     }
   }
   
@@ -181,14 +283,19 @@ class PaymentService {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
+        // Calculate membership expiry date (30 days from now)
+        final DateTime now = DateTime.now();
+        final DateTime expiryDate = now.add(const Duration(days: 30));
+        
         await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
           'membership_active': true,
           'membership_updated_at': FieldValue.serverTimestamp(),
+          'membership_expiry': Timestamp.fromDate(expiryDate),
+          'membership_type': 'premium',
         });
-        print("Membership status updated successfully");
       }
     } catch (e) {
-      print("Error updating membership status: $e");
+      // Handle error silently
     }
   }
   
@@ -200,7 +307,9 @@ class PaymentService {
     required String description,
     bool updateMembership = false,
   }) async {
-    print("Showing fallback payment dialog");
+    // Generate a mock payment ID for the test transaction
+    final String mockPaymentId = 'mock_${DateTime.now().millisecondsSinceEpoch}';
+    
     final bool result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -214,18 +323,28 @@ class PaymentService {
             Text('Description: $description'),
             Text('Amount: ₹$amount'),
             const SizedBox(height: 16),
-            const Text('Razorpay could not be initialized.'),
-            const SizedBox(height: 8),
             const Text('This is a test payment. No actual payment will be processed.'),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () {
+              Navigator.of(context).pop(false);
+            },
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () async {
+              // Store successful test transaction
+              await _storeTransaction(
+                paymentId: mockPaymentId,
+                orderId: 'fallback_success',
+                signature: 'fallback',
+                amount: amount,
+                description: description,
+                status: 'success',
+              );
+              
               // Update membership status if requested
               if (updateMembership) {
                 await _updateMembershipStatus();
@@ -242,7 +361,6 @@ class PaymentService {
       ),
     ) ?? false;
     
-    print("Fallback payment result: $result");
     return result;
   }
 } 

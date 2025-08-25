@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fitconnect/services/payment_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:fitconnect/screens/transaction_history_screen.dart';
 
 class PaymentScreen extends StatefulWidget {
   final String sessionType;
@@ -145,6 +146,21 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     Text('• Use any 3-digit CVV'),
                   ],
                 ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: TextButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const TransactionHistoryScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.history),
+                label: const Text('View Payment History'),
               ),
             ),
           ],

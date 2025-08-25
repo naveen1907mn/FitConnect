@@ -1,7 +1,15 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
- 
+import 'package:fitconnect/utils/constants.dart';
+
 class AppConfig {
-  // Razorpay API keys
-  static String razorpayKeyId = dotenv.env['RAZORPAY_KEY_ID'] ?? 'rzp_test_R98nDyrvpNzYDc';
-  static String razorpayKeySecret = dotenv.env['RAZORPAY_KEY_SECRET'] ?? 'gdGEerEYY5Jgbl14sV6VL2il';
+  // Razorpay API keys from Constants
+  static String razorpayKeyId = Constants.razorpayKeyId;
+  static String razorpayKeySecret = Constants.razorpayKeySecret;
+  
+  // App settings
+  static bool useTestPayments = false;
+  
+  // Initialize config
+  static void initializeConfig() {
+    // Configuration initialization code goes here
+  }
 } 

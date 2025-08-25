@@ -3,9 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:fitconnect/services/payment_service.dart';
-import 'package:fitconnect/services/simple_payment_service.dart';
 import 'package:fitconnect/utils/notification_utils.dart';
 import 'package:fitconnect/screens/auth/login_screen.dart';
+import 'package:fitconnect/screens/standalone_razorpay_screen.dart';
 
 class BookingScreen extends StatefulWidget {
   const BookingScreen({super.key});
@@ -83,6 +83,7 @@ class _BookingScreenState extends State<BookingScreen> {
     }
   }
 
+  // Update the _bookSession method to use the StandaloneRazorpayScreen
   Future<void> _bookSession() async {
     // Check if user is logged in
     if (_auth.currentUser == null) {
@@ -121,67 +122,53 @@ class _BookingScreenState extends State<BookingScreen> {
     try {
       print("Starting booking process...");
       
-      // Restore payment functionality
+      // Get the amount for the selected session type
       final double amount = _prices[_selectedType] ?? 299.0;
       final user = _auth.currentUser;
       
-      print("Initiating payment with SimplePaymentService...");
-      final bool paymentSuccessful = await SimplePaymentService.showPaymentDialog(
-        context: context,
-        amount: amount.toString(),
-        name: 'FitConnect',
-        description: '$_selectedType Session',
-      );
-      
-      print("Payment result: $paymentSuccessful");
-      
-      // If payment was successful, create the booking
-      if (paymentSuccessful) {
-        final String userId = _auth.currentUser!.uid;
+      print("Initiating payment with Razorpay...");
+      try {
+        // Launch the standalone Razorpay screen with booking details
+        final bool paymentSuccessful = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(
+            builder: (context) => StandaloneRazorpayScreen(
+              prefilledAmount: amount.toStringAsFixed(0), // Format as integer string
+              sessionType: _selectedType,
+              sessionDate: _selectedDate,
+              sessionTime: _selectedTime,
+              isForBooking: true,
+            ),
+          ),
+        ) ?? false;
         
-        print("Creating booking document in Firestore...");
-        try {
-          // Create a Map with the booking data
-          Map<String, dynamic> bookingData = {
-            'userId': userId,
-            'type': _selectedType,
-            'date': Timestamp.fromDate(_selectedDate),
-            'time': _selectedTime,
-            'attendance': false,
-            'created_at': FieldValue.serverTimestamp(),
-          };
-          
-          print("Booking data: $bookingData");
-          
-          // Use a simpler approach to add the document
-          DocumentReference docRef = _firestore.collection('booking').doc();
-          await docRef.set(bookingData);
-          
-          print("Booking created successfully with ID: ${docRef.id}");
-          
+        print("Payment result: $paymentSuccessful");
+        
+        // If payment was successful, the booking has already been created in the StandaloneRazorpayScreen
+        if (paymentSuccessful) {
           if (!mounted) return;
           NotificationUtils.showNotification(
             context,
             'Session booked successfully!',
           );
-        } catch (firestoreError) {
-          print("Firestore error details: $firestoreError");
-          throw firestoreError;
+        } else {
+          if (!mounted) return;
+          NotificationUtils.showNotification(
+            context,
+            'Payment was cancelled or failed',
+            isError: true,
+          );
         }
-      } else {
+      } catch (e) {
+        print("Error during payment: $e");
         if (!mounted) return;
         NotificationUtils.showNotification(
           context,
-          'Payment was cancelled or failed',
+          'Error processing payment: ${e.toString()}',
           isError: true,
         );
       }
     } catch (e) {
       print("Error during booking: $e");
-      if (e.toString().contains('NotInitializedError')) {
-        print("Firestore not initialized error detected");
-      }
-      
       if (!mounted) return;
       NotificationUtils.showNotification(
         context,
@@ -189,11 +176,9 @@ class _BookingScreenState extends State<BookingScreen> {
         isError: true,
       );
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
